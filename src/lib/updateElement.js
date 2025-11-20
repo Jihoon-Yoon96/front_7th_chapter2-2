@@ -22,7 +22,12 @@ function updateAttributes(target, newProps, oldProps) {
     }
 
     // checked, disabled, selected 등 boolean 프로퍼티 직접 처리
-    if (key === "checked" || key === "disabled" || key === "selected") {
+    if (
+      key === "checked" ||
+      key === "disabled" ||
+      key === "selected" ||
+      key === "readOnly"
+    ) {
       target[key] = !!newValue;
     }
     // className 처리
