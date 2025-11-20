@@ -21,12 +21,15 @@ function updateAttributes(target, newProps, oldProps) {
       return;
     }
 
+    // checked, disabled 등 boolean 프로퍼티 직접 처리
+    if (key === "checked" || key === "disabled") {
+      target[key] = !!newValue; // !!를 사용해 명확한 boolean 값으로 설정
+    }
     // className 처리
-    if (key === "className") {
+    else if (key === "className") {
       if (newValue) {
         target.className = newValue;
       } else {
-        // className prop이 없어지면 class 속성을 완전히 제거합니다.
         target.removeAttribute("class");
       }
     }
@@ -40,7 +43,7 @@ function updateAttributes(target, newProps, oldProps) {
         addEvent(target, eventType, newValue);
       }
     }
-    // 기타 속성 처리
+    // 기타 일반 속성 처리
     else {
       if (newValue === undefined || newValue === null) {
         target.removeAttribute(key);
@@ -59,7 +62,6 @@ function updateAttributes(target, newProps, oldProps) {
  * @param {number} index - 부모 요소 내에서의 현재 노드의 인덱스
  */
 export function updateElement(parentElement, newNode, oldNode, index = 0) {
-  // 1. 이전 노드가 없는 경우: 새 노드 추가
   if (!oldNode) {
     parentElement.appendChild(createElement(newNode));
     return;
@@ -67,13 +69,11 @@ export function updateElement(parentElement, newNode, oldNode, index = 0) {
 
   const targetNode = parentElement.childNodes[index];
 
-  // 2. 새 노드가 없는 경우: 이전 노드 제거
   if (!newNode) {
     parentElement.removeChild(targetNode);
     return;
   }
 
-  // 3. 두 노드가 모두 텍스트 노드이고 내용이 다른 경우: 텍스트 업데이트
   if (typeof newNode === "string" && typeof oldNode === "string") {
     if (newNode !== oldNode) {
       targetNode.textContent = newNode;
@@ -81,17 +81,13 @@ export function updateElement(parentElement, newNode, oldNode, index = 0) {
     return;
   }
 
-  // 4. 노드 타입이 다른 경우: 노드 교체
   if (newNode.type !== oldNode.type) {
     parentElement.replaceChild(createElement(newNode), targetNode);
     return;
   }
 
-  // 5. 같은 타입의 노드 업데이트 (재귀의 핵심)
-  // 속성 업데이트
   updateAttributes(targetNode, newNode.props, oldNode.props);
 
-  // 자식 노드 재귀적 업데이트
   const newLength = newNode.children.length;
   const oldLength = oldNode.children.length;
   const maxLength = Math.max(newLength, oldLength);
