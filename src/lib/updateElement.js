@@ -8,7 +8,6 @@ import { createElement } from "./createElement.js";
  * @param {object} oldProps - 이전 속성 객체
  */
 function updateAttributes(target, newProps, oldProps) {
-  // newProps나 oldProps가 null일 경우를 대비해 빈 객체로 처리
   const newP = newProps || {};
   const oldP = oldProps || {};
   const allProps = { ...oldP, ...newP };
@@ -22,25 +21,29 @@ function updateAttributes(target, newProps, oldProps) {
       return;
     }
 
-    // 속성이 제거된 경우
-    if (newValue === undefined || newValue === null) {
-      if (key.startsWith("on")) {
-        const eventType = key.slice(2).toLowerCase();
-        removeEvent(target, eventType, oldValue);
+    // className 처리
+    if (key === "className") {
+      if (newValue) {
+        target.className = newValue;
       } else {
-        target.removeAttribute(key);
+        // className prop이 없어지면 class 속성을 완전히 제거합니다.
+        target.removeAttribute("class");
       }
     }
-    // 속성이 추가/변경 된 경우
-    else {
-      if (key.startsWith("on")) {
-        const eventType = key.slice(2).toLowerCase();
-        if (oldValue) {
-          removeEvent(target, eventType, oldValue);
-        }
+    // 이벤트 핸들러 처리
+    else if (key.startsWith("on")) {
+      const eventType = key.slice(2).toLowerCase();
+      if (oldValue) {
+        removeEvent(target, eventType, oldValue);
+      }
+      if (newValue) {
         addEvent(target, eventType, newValue);
-      } else if (key === "className") {
-        target.className = newValue;
+      }
+    }
+    // 기타 속성 처리
+    else {
+      if (newValue === undefined || newValue === null) {
+        target.removeAttribute(key);
       } else {
         target.setAttribute(key, newValue);
       }
