@@ -21,9 +21,9 @@ function updateAttributes(target, newProps, oldProps) {
       return;
     }
 
-    // checked, disabled 등 boolean 프로퍼티 직접 처리
-    if (key === "checked" || key === "disabled") {
-      target[key] = !!newValue; // !!를 사용해 명확한 boolean 값으로 설정
+    // checked, disabled, selected 등 boolean 프로퍼티 직접 처리
+    if (key === "checked" || key === "disabled" || key === "selected") {
+      target[key] = !!newValue;
     }
     // className 처리
     else if (key === "className") {
