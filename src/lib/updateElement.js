@@ -1,124 +1,152 @@
 import { addEvent, removeEvent } from "./eventManager";
 import { createElement } from "./createElement.js";
 
-/**
- * DOM 요소의 속성을 업데이트, 추가, 제거합니다.
- * @param {HTMLElement} target - 속성을 업데이트할 DOM 요소
- * @param {object} newProps - 새로운 속성 객체
- * @param {object} oldProps - 이전 속성 객체
- */
-function updateAttributes(target, newProps, oldProps) {
-  const newP = newProps || {};
-  const oldP = oldProps || {};
-  const allProps = { ...oldP, ...newP };
+// Property만 설정하는 attributes (DOM에 표시 안 함)
+const PROPERTY_ONLY_ATTRIBUTES = new Set(["checked", "selected"]);
 
-  Object.keys(allProps).forEach((key) => {
-    const oldValue = oldP[key];
-    const newValue = newP[key];
+// Property + attribute 모두 설정하는 attributes
+const PROPERTY_AND_ATTR_ATTRIBUTES = new Set([
+  "disabled",
+  "readonly",
+  "multiple",
+]);
 
-    // 속성이 완전히 동일하면 아무 작업도 하지 않음
-    if (oldValue === newValue) {
-      return;
+function setElementProperty(element, key, value) {
+  let attrName = key === "className" ? "class" : key;
+
+  // readOnly → readonly 변환
+  if (key === "readOnly") {
+    attrName = "readonly";
+  }
+
+  // Property만 설정하는 attributes
+  if (PROPERTY_ONLY_ATTRIBUTES.has(attrName.toLowerCase())) {
+    element[key] = value;
+    // attribute는 설정하지 않음
+  }
+  // Property + attribute 모두 설정하는 attributes
+  else if (PROPERTY_AND_ATTR_ATTRIBUTES.has(attrName.toLowerCase())) {
+    element[key] = value;
+    if (value) {
+      element.setAttribute(attrName, "");
+    } else {
+      element.removeAttribute(attrName);
     }
+  }
+  // 일반 attributes
+  else {
+    element.setAttribute(attrName, value);
+  }
+}
 
-    // checked, disabled, selected 등 boolean 프로퍼티 직접 처리
-    if (
-      key === "checked" ||
-      key === "disabled" ||
-      key === "selected" ||
-      key === "readOnly"
-    ) {
-      target[key] = !!newValue;
-    }
-    // className 처리
-    else if (key === "className") {
-      if (newValue) {
-        target.className = newValue;
+function updateAttributes(target, newProps = {}, oldProps = {}) {
+  // null/undefined 처리
+  newProps = newProps || {};
+  oldProps = oldProps || {};
+
+  // 기존 속성 제거
+  Object.keys(oldProps).forEach((key) => {
+    if (!(key in newProps)) {
+      const attrName = key === "className" ? "class" : key;
+      if (attrName.startsWith("on")) {
+        removeEvent(target, attrName.slice(2).toLowerCase(), oldProps[key]);
       } else {
-        target.removeAttribute("class");
+        // Property-only attributes
+        if (PROPERTY_ONLY_ATTRIBUTES.has(attrName.toLowerCase())) {
+          target[key] = false;
+        }
+        // Property + attribute attributes
+        else if (PROPERTY_AND_ATTR_ATTRIBUTES.has(attrName.toLowerCase())) {
+          target[key] = false;
+          target.removeAttribute(attrName);
+        }
+        // 일반 attributes
+        else {
+          target.removeAttribute(attrName);
+        }
       }
     }
-    // 이벤트 핸들러 처리
-    else if (key.startsWith("on")) {
-      const eventType = key.slice(2).toLowerCase();
-      if (oldValue) {
-        removeEvent(target, eventType, oldValue);
-      }
-      if (newValue) {
-        addEvent(target, eventType, newValue);
-      }
-    }
-    // 기타 일반 속성 처리
-    else {
-      if (newValue === undefined || newValue === null) {
-        target.removeAttribute(key);
+  });
+
+  // 새 속성 추가/업데이트
+  Object.entries(newProps).forEach(([key, value]) => {
+    if (oldProps[key] !== value) {
+      const attrName = key === "className" ? "class" : key;
+      if (attrName.startsWith("on")) {
+        const eventType = attrName.slice(2).toLowerCase();
+        // 기존 핸들러 제거
+        if (oldProps[key]) {
+          removeEvent(target, eventType, oldProps[key]);
+        }
+        // 새 핸들러 추가
+        addEvent(target, eventType, value);
       } else {
-        target.setAttribute(key, newValue);
+        setElementProperty(target, key, value);
       }
     }
   });
 }
 
-/**
- * 가상 DOM의 변경사항을 실제 DOM에 반영합니다.
- * @param {HTMLElement} parentElement - 부모 DOM 요소
- * @param {object} newNode - 새로운 가상 노드
- * @param {object} oldNode - 이전 가상 노드 또는 DOM 요소
- * @param {number} index - 부모 요소 내에서의 현재 노드의 인덱스
- */
-export function updateElement(parentElement, newNode, oldNode, index = 0) {
-  if (!oldNode) {
-    parentElement.appendChild(createElement(newNode));
-    return;
-  }
-
-  const targetNode = parentElement.childNodes[index];
-
-  // 2. 새 노드가 없는 경우: 이전 노드 제거
-  if (!newNode) {
-    // targetNode가 존재할 때만 removeChild를 호출하도록 방어 코드 추가
+export function updateElement(targetNode, newNode, oldNode) {
+  // 1️⃣ newNode가 없으면 기존 요소 제거
+  if (newNode === null || newNode === undefined || newNode === false) {
     if (targetNode) {
-      parentElement.removeChild(targetNode);
+      targetNode.remove();
     }
     return;
   }
 
-  if (typeof newNode === "string" && typeof oldNode === "string") {
-    if (newNode !== oldNode) {
-      parentElement.replaceChild(createElement(newNode), targetNode);
+  // 2️⃣ 텍스트/숫자 노드 처리
+  if (typeof newNode === "string" || typeof newNode === "number") {
+    if (targetNode.nodeType === Node.TEXT_NODE) {
+      targetNode.textContent = String(newNode);
+    } else {
+      // 요소 노드를 텍스트 노드로 교체
+      const newTextNode = document.createTextNode(String(newNode));
+      targetNode.replaceWith(newTextNode);
     }
     return;
   }
-  if (newNode.type !== oldNode.type) {
-    parentElement.replaceChild(createElement(newNode), targetNode);
-    return;
-  }
 
-  // 5. 같은 타입 노드의 속성과 자식 업데이트
-  updateAttributes(targetNode, newNode.props, oldNode.props);
-
-  // --- 새로운 자식 업데이트 로직 ---
-  const newLength = newNode.children.length;
-  const oldLength = oldNode.children.length;
-  const minLength = Math.min(newLength, oldLength);
-
-  // 5-1. 공통 자식들 재귀적으로 업데이트
-  for (let i = 0; i < minLength; i++) {
-    updateElement(targetNode, newNode.children[i], oldNode.children[i], i);
-  }
-
-  // 5-2. 새로운 자식들 추가
-  if (newLength > oldLength) {
-    for (let i = minLength; i < newLength; i++) {
-      updateElement(targetNode, newNode.children[i], undefined, i);
+  // 3️⃣ VNode 객체 처리
+  if (newNode.type) {
+    // oldNode가 없거나 타입이 다르면 요소 교체
+    if (!oldNode || newNode.type !== oldNode.type) {
+      const newElement = createElement(newNode);
+      targetNode.replaceWith(newElement);
+      return;
     }
-  }
-  // 5-3. 불필요한 이전 자식들 제거
-  else if (oldLength > newLength) {
-    // 뒤에서부터 제거해야 live collection의 인덱스 문제가 발생하지 않음
-    for (let i = oldLength - 1; i >= newLength; i--) {
-      // 여기서 직접 DOM 노드를 제거. 재귀 호출을 사용하지 않음.
-      targetNode.removeChild(targetNode.childNodes[i]);
+
+    // 같은 타입: 속성과 자식 업데이트
+    if (typeof newNode.type === "string") {
+      // HTML 요소: 속성 업데이트
+      updateAttributes(targetNode, newNode.props, oldNode?.props);
+
+      // 자식 노드 업데이트
+      const newChildren = newNode.children || [];
+      const oldChildren = oldNode.children || [];
+      const maxLength = Math.max(newChildren.length, oldChildren.length);
+      const targetChildren = Array.from(targetNode.childNodes);
+
+      for (let i = 0; i < maxLength; i++) {
+        if (i < newChildren.length && i < oldChildren.length) {
+          // 기존 자식 업데이트
+          if (targetChildren[i]) {
+            updateElement(targetChildren[i], newChildren[i], oldChildren[i]);
+          } else {
+            // 자식이 없으면 새로 추가
+            targetNode.appendChild(createElement(newChildren[i]));
+          }
+        } else if (i < newChildren.length) {
+          // 새로운 자식 추가
+          targetNode.appendChild(createElement(newChildren[i]));
+        } else {
+          // 기존 자식 제거
+          if (targetChildren[i]) {
+            targetChildren[i].remove();
+          }
+        }
+      }
     }
   }
 }
