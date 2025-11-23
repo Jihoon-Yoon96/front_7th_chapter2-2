@@ -3,7 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push: # push trigger
     branches:
-      - main
+      - easy
       - feature-*  # Feature 브랜치도 배포
 
 permissions:
